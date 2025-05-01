@@ -1,0 +1,103 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <title>Soccer Ball Detector</title>
+    <style>
+        body {
+            font-family: Arial, sans-serif;
+            padding: 20px;
+        }
+
+        #video-container, #stats, #downloadBtn {
+            margin-top: 20px;
+        }
+
+        #stream {
+            max-width: 100%;
+        }
+
+        button {
+            padding: 10px 15px;
+            font-size: 1rem;
+            cursor: pointer;
+        }
+    </style>
+</head>
+<body>
+    <h1>Soccer Ball Detector</h1>
+
+    <form id="uploadForm">
+        <input type="file" name="file" accept="video/*" required>
+        <button type="submit">Upload and Process</button>
+    </form>
+
+    <div id="video-container" style="display: none;">
+        <h2>Live Processed Stream</h2>
+        <img id="stream" src="" alt="Stream not available">
+    </div>
+
+    <div id="stats"></div>
+
+    <button id="downloadBtn" style="display: none;">Download Detection Report (CSV)</button>
+
+    <script>
+        const form = document.getElementById("uploadForm");
+        const streamImg = document.getElementById("stream");
+        const videoContainer = document.getElementById("video-container");
+        const statsDiv = document.getElementById("stats");
+        const downloadBtn = document.getElementById("downloadBtn");
+
+        let video_id = null;
+
+        form.addEventListener("submit", async function(e) {
+            e.preventDefault();
+            const formData = new FormData(form);
+
+            const uploadResponse = await fetch("/upload", {
+                method: "POST",
+                body: formData
+            });
+
+            const result = await uploadResponse.json();
+            video_id = result.video_id;
+
+            if (!video_id) {
+                alert("Failed to upload video");
+                return;
+            }
+
+            streamImg.src = `/stream?video_id=${video_id}`;
+            videoContainer.style.display = "block";
+            statsDiv.innerHTML = "Processing...";
+            downloadBtn.style.display = "none";
+
+            const pollForStats = async () => {
+                const res = await fetch(`/stat?video_id=${video_id}`);
+                if (res.ok) {
+                    const stats = await res.json();
+                    if (stats.total > 0) {
+                        statsDiv.innerHTML = `
+                            <h3>Detection Statistics</h3>
+                            <p><strong>Original Filename:</strong> ${stats.original_name}</p>
+                            <p><strong>Total Frames:</strong> ${stats.total}</p>
+                            <p><strong>Detected Frames:</strong> ${stats.detected}</p>
+                            <p><strong>Percent of Detections:</strong> ${stats.percent}%</p>
+                        `;
+
+                        downloadBtn.style.display = "inline-block";
+                        downloadBtn.onclick = () => {
+                            window.location.href = `/report`;
+                        };
+                        return;
+                    }
+                }
+
+                setTimeout(pollForStats, 2000);
+            };
+
+            pollForStats();
+        });
+    </script>
+</body>
+</html>
